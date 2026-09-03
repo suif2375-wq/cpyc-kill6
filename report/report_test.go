@@ -27,7 +27,8 @@ func TestGenerateHTMLCore(t *testing.T) {
 		"福彩3D 百十个杀码参考",
 		"2026222", "380",
 		"wu529778790/fc3d-kill6", // GitHub 图标
-		"wx-auth-sdk",            // 认证接入
+		"password-gate",          // 密码验证遮罩
+		"验证并进入",                  // 密码验证按钮
 		"Walk-forward 滚动验证",      // walk-forward 摘要
 		"polyline",               // 趋势图折线
 		"小白版",                    // 白话解释卡
@@ -40,6 +41,9 @@ func TestGenerateHTMLCore(t *testing.T) {
 		if !strings.Contains(html, want) {
 			t.Errorf("HTML 缺少关键内容: %q", want)
 		}
+	}
+	if strings.Contains(html, "wx-auth-sdk") || strings.Contains(html, "WxAuth") {
+		t.Error("旧微信认证脚本不应继续出现在页面")
 	}
 }
 

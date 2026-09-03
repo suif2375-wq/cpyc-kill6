@@ -132,6 +132,10 @@ header{display:flex;align-items:center;justify-content:space-between;height:80px
 .gh-link:hover{color:var(--text1);border-color:rgba(34,211,238,.45)}
 .gh-link:active{transform:scale(.94)}
 .gh-link svg{width:17px;height:17px;display:block}
+.password-gate{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(2,6,23,.86);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.password-gate[hidden]{display:none}
+.password-card{width:min(380px,100%);padding:28px;border-radius:18px;background:linear-gradient(180deg,#121A2B,#0D1424);border:1px solid rgba(34,211,238,.42);box-shadow:0 24px 70px rgba(0,0,0,.55)}
+.password-title{font-size:22px;font-weight:700;color:var(--text1);text-align:center}.password-subtitle{margin-top:8px;color:var(--text2);font-size:12px;line-height:1.6;text-align:center}.password-form{display:flex;flex-direction:column;gap:12px;margin-top:20px}.password-input{width:100%;height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--border);background:#0A0E17;color:var(--text1);font:600 16px var(--font-num);outline:none}.password-input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(34,211,238,.14)}.password-submit{height:44px;border:0;border-radius:10px;background:linear-gradient(90deg,#06B6D4,#22D3EE);color:#06202A;font-size:14px;font-weight:800;cursor:pointer}.password-submit:hover{filter:brightness(1.08)}.password-error{min-height:18px;color:var(--red);font-size:12px;text-align:center}.password-hint{margin-top:12px;color:var(--text3);font-size:10px;text-align:center}
 .hero{padding:56px 0 48px;display:flex;flex-direction:column;gap:28px}
 .hero-top{display:flex;justify-content:space-between;align-items:flex-end;gap:24px}
 .hero-left{display:flex;flex-direction:column;gap:10px}
@@ -779,6 +783,19 @@ footer{padding:22px 0 10px;gap:8px}
     </div>
   </div>
 
+  <div class="password-gate" id="password-gate" role="dialog" aria-modal="true" aria-labelledby="password-gate-title">
+    <div class="password-card">
+      <div class="password-title" id="password-gate-title">访问验证</div>
+      <div class="password-subtitle">请输入访问密码，验证成功后才能查看预测数据。</div>
+      <form class="password-form" id="password-form" autocomplete="off">
+        <input class="password-input" id="password-input" type="password" inputmode="numeric" autocomplete="off" aria-label="访问密码" placeholder="请输入访问密码" autofocus>
+        <button class="password-submit" type="submit">验证并进入</button>
+        <div class="password-error" id="password-error" role="alert" aria-live="polite"></div>
+      </form>
+      <div class="password-hint">密码验证通过后，弹窗才会关闭</div>
+    </div>
+  </div>
+
   <footer>
     <span class="foot-text">数据来源：福彩3D / 双色球 历史开奖数据 · 算法严格不含未来信息 · 仅供研究参考</span>
     <span class="foot-meta">3D 数据截止 {{.Meta.LatestDate}}{{if .SSQ}} · 双色球截止 {{.SSQ.Meta.LatestDate}}{{end}} · 每日开奖后自动更新</span>
@@ -786,32 +803,45 @@ footer{padding:22px 0 10px;gap:8px}
   </footer>
 </div>
 <script>
-// wx-auth-sdk 可选认证（jsdmirror 主源 + jsdelivr 兜底，加载失败静默不影响页面）
+// 访问密码验证：默认密码为 123456。密码正确后才允许关闭遮罩层。
 (function () {
-  var CDNS = [
-    'https://cdn.jsdmirror.com/npm/wx-auth-sdk@1.2.10/dist/wx-auth.umd.js',
-    'https://cdn.jsdelivr.net/npm/wx-auth-sdk@1.2.10/dist/wx-auth.umd.js'
-  ];
-  var css = document.createElement('link');
-  css.rel = 'stylesheet';
-  css.href = CDNS[0].replace('wx-auth.umd.js', 'wx-auth.css');
-  document.head.appendChild(css);
-  function load(i) {
-    if (i >= CDNS.length) return;
-    var s = document.createElement('script');
-    s.src = CDNS[i];
-    s.onload = function () {
-      if (window.WxAuth) {
-        WxAuth.init({
-          required: false,
-          onVerified: function (u) { console.log('[wx-auth] 认证成功', u); }
-        });
-      }
-    };
-    s.onerror = function () { load(i + 1); };
-    document.body.appendChild(s);
+  var PASSWORD = '123456';
+  var gate = document.getElementById('password-gate');
+  var form = document.getElementById('password-form');
+  var input = document.getElementById('password-input');
+  var error = document.getElementById('password-error');
+  if (!gate || !form || !input || !error) return;
+  function unlock() {
+    gate.hidden = true;
+    document.body.style.overflow = '';
+    input.value = '';
+    error.textContent = '';
   }
-  load(0);
+  document.body.style.overflow = 'hidden';
+  input.focus();
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    if (input.value === PASSWORD) {
+      unlock();
+      return;
+    }
+    error.textContent = '密码错误，请重新输入。';
+    input.value = '';
+    input.focus();
+  });
+  gate.addEventListener('click', function (event) {
+    if (event.target === gate) {
+      error.textContent = '请输入正确密码后才能关闭弹窗。';
+      input.focus();
+    }
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !gate.hidden) {
+      event.preventDefault();
+      error.textContent = '请输入正确密码后才能关闭弹窗。';
+      input.focus();
+    }
+  });
 })();
 </script>
 </body>
