@@ -46,12 +46,9 @@ func SyncDigits(kind, csvPath string) (added int, source string, err error) {
 	if err != nil {
 		return 0, src.Name, err
 	}
-	for _, draw := range draws {
-		n, e := data.AppendDigitCSV(csvPath, draw)
-		if e != nil {
-			return added, src.Name, e
-		}
-		added += n
+	added, err = data.AppendDigitCSVBatch(csvPath, draws)
+	if err != nil {
+		return added, src.Name, err
 	}
 	return added, src.Name, nil
 }

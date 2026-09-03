@@ -57,20 +57,25 @@ type PatView struct {
 
 // view 模板视图（Rows 已按最新在前排序）
 type view struct {
-	Meta      backtest.Meta
-	Pred      backtest.Predict
-	Rows      []backtest.Row
-	MCards    []backtest.Row
-	Banners   Banners
-	NextIssue string
-	Ring      string
-	Pct6Beat  float64
-	WFNote    string
-	TrendSVG  string
-	SSQRing   string
-	SSQ       *SSQView
-	Pat       *PatView
+	Meta         backtest.Meta
+	Pred         backtest.Predict
+	Rows         []backtest.Row
+	MCards       []backtest.Row
+	Banners      Banners
+	NextIssue    string
+	Ring         string
+	Pct6Beat     float64
+	WFNote       string
+	TrendSVG     string
+	SSQRing      string
+	SSQ          *SSQView
+	Pat          *PatView
+	SitePassword string
 }
+
+// DefaultSitePassword 是静态页面访问密码。修改此常量后重新生成 index.html 即可生效。
+// 该校验只适合轻量访问门槛；静态页面无法提供真正的服务端保密。
+const DefaultSitePassword = "123456"
 
 // ringSVG 生成 6 杀全中率环形进度（path 圆弧，规避 transform 解析问题）
 func ringSVG(pct float64) string {
@@ -805,7 +810,7 @@ footer{padding:22px 0 10px;gap:8px}
 <script>
 // 访问密码验证：默认密码为 123456。密码正确后才允许关闭遮罩层。
 (function () {
-  var PASSWORD = '123456';
+  var PASSWORD = '{{.SitePassword}}';
   var gate = document.getElementById('password-gate');
   var form = document.getElementById('password-form');
   var input = document.getElementById('password-input');
@@ -899,13 +904,14 @@ func GenerateHTML(m backtest.Meta, pred backtest.Predict, rows []backtest.Row, b
 		Meta: m, Pred: pred,
 		Rows: rev, MCards: mc,
 		Banners: b, NextIssue: nextIssue,
-		Ring:     ringSVG(m.Period6Pct100),
-		Pct6Beat: m.Period6Pct100 - 51.2,
-		WFNote:   wfNote(wf),
-		TrendSVG: trendSVG(rev),
-		SSQRing:  "",
-		SSQ:      sv,
-		Pat:      buildPatView(pr),
+		Ring:         ringSVG(m.Period6Pct100),
+		Pct6Beat:     m.Period6Pct100 - 51.2,
+		WFNote:       wfNote(wf),
+		TrendSVG:     trendSVG(rev),
+		SSQRing:      "",
+		SSQ:          sv,
+		Pat:          buildPatView(pr),
+		SitePassword: DefaultSitePassword,
 	}
 	if sv != nil {
 		data.SSQRing = ringSVG(sv.Meta.BluePct)

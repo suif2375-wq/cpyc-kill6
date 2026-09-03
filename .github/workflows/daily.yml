@@ -1,4 +1,4 @@
-name: 百十个杀码每日更新
+name: 福彩3D排列3排列5双色球每日更新
 
 on:
   push:
@@ -34,6 +34,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.26'
+          cache: false
 
       - name: 构建
         run: go build -o fc3d-kill6 .

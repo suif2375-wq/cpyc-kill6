@@ -28,7 +28,8 @@ func TestGenerateHTMLCore(t *testing.T) {
 		"2026222", "380",
 		"suif2375-wq.github.io/cpyc-kill6/", // 右上角首页链接
 		"password-gate",                     // 密码验证遮罩
-		"验证",                             // 密码验证按钮
+		"验证",                                // 密码验证按钮
+		"var PASSWORD = '123456'",           // 默认密码注入
 		"Walk-forward 滚动验证",                 // walk-forward 摘要
 		"polyline",                          // 趋势图折线
 		"小白版",                               // 白话解释卡

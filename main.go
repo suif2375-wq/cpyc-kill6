@@ -34,7 +34,7 @@ func main() {
 	flag.Parse()
 
 	fmt.Println("=" + repeat("=", 30))
-	fmt.Println("福彩3D 六杀 + 双色球统计 · 云端更新 (Go)")
+	fmt.Println("福彩3D + 排列3 + 排列5 + 双色球 · 云端更新 (Go)")
 	fmt.Println("=" + repeat("=", 30))
 
 	// Step 1: 获取最新开奖
