@@ -26,17 +26,17 @@ func TestGenerateHTMLCore(t *testing.T) {
 	for _, want := range []string{
 		"福彩3D 百十个杀码参考",
 		"2026222", "380",
-		"wu529778790/fc3d-kill6", // GitHub 图标
-		"password-gate",          // 密码验证遮罩
-		"验证并进入",                  // 密码验证按钮
-		"Walk-forward 滚动验证",      // walk-forward 摘要
-		"polyline",               // 趋势图折线
-		"小白版",                    // 白话解释卡
-		"排除掉的号码",                 // 术语表：杀=排除
-		"彩票小白",                   // 术语表折叠入口
-		"人话：",                    // 各 section 就近人话注释
-		">福彩3D</label>",          // tab 标签
-		">双色球</label>",           // tab 标签
+		"suif2375-wq.github.io/cpyc-kill6/", // 右上角首页链接
+		"password-gate",                     // 密码验证遮罩
+		"验证",                             // 密码验证按钮
+		"Walk-forward 滚动验证",                 // walk-forward 摘要
+		"polyline",                          // 趋势图折线
+		"小白版",                               // 白话解释卡
+		"排除掉的号码",                            // 术语表：杀=排除
+		"彩票小白",                              // 术语表折叠入口
+		"人话：",                               // 各 section 就近人话注释
+		">福彩3D</label>",                     // tab 标签
+		">双色球</label>",                      // tab 标签
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("HTML 缺少关键内容: %q", want)

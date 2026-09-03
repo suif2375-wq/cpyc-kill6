@@ -24,3 +24,15 @@ func TestExtendWithDigits(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateDigitFooterDates(t *testing.T) {
+	base := `<span class="foot-meta">3D 数据截止 2026-09-03 · 双色球截止 2026-09-03 · 每日开奖后自动更新</span>`
+	p3 := &position.Result{Latest: data.DigitDraw{Date: "2026-09-03"}}
+	p5 := &position.Result{Latest: data.DigitDraw{Date: "2026-09-02"}}
+	got := updateDigitFooterDates(base, p3, p5)
+	for _, want := range []string{"排列3 数据截止 2026-09-03", "排列5 数据截止 2026-09-02"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("footer missing %q: %s", want, got)
+		}
+	}
+}

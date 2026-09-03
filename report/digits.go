@@ -23,6 +23,7 @@ func ExtendWithDigits(base string, p3, p5 *position.Result) string {
 	base = strings.Replace(base, "<title>福彩3D 杀码 + 双色球 数据参考</title>", "<title>福彩3D + 排列3 + 排列5 + 双色球 数据参考</title>", 1)
 	base = strings.Replace(base, "福彩3D + 双色球 · 数据参考", "福彩3D + 排列3/5 + 双色球 · 数据参考", 1)
 	base = strings.Replace(base, "福彩3D + 双色球 · 每日自动更新", "福彩3D + 排列3/5 + 双色球 · 每日自动更新", 1)
+	base = updateDigitFooterDates(base, p3, p5)
 	base = strings.Replace(base, `<input type="radio" name="lot" id="tab-ssq">`, `<input type="radio" name="lot" id="tab-ssq">
     <input type="radio" name="lot" id="tab-p3">
     <input type="radio" name="lot" id="tab-p5">`, 1)
@@ -36,6 +37,37 @@ func ExtendWithDigits(base string, p3, p5 *position.Result) string {
 		base = strings.Replace(base, marker, insert+"\n"+marker, 1)
 	}
 	return base
+}
+
+func updateDigitFooterDates(base string, p3, p5 *position.Result) string {
+	prefix := `<span class="foot-meta">`
+	start := strings.Index(base, prefix)
+	if start < 0 {
+		return base
+	}
+	endRel := strings.Index(base[start+len(prefix):], `</span>`)
+	if endRel < 0 {
+		return base
+	}
+	end := start + len(prefix) + endRel
+	content := base[start+len(prefix) : end]
+	dates := make([]string, 0, 2)
+	if p3 != nil && p3.Latest.Date != "" {
+		dates = append(dates, "排列3 数据截止 "+p3.Latest.Date)
+	}
+	if p5 != nil && p5.Latest.Date != "" {
+		dates = append(dates, "排列5 数据截止 "+p5.Latest.Date)
+	}
+	if len(dates) == 0 {
+		return base
+	}
+	marker := " · 每日开奖后自动更新"
+	if strings.Contains(content, marker) {
+		content = strings.Replace(content, marker, " · "+strings.Join(dates, " · ")+marker, 1)
+	} else {
+		content += " · " + strings.Join(dates, " · ")
+	}
+	return base[:start+len(prefix)] + content + base[end:]
 }
 
 func renderDigitPane(title, key, desc string, res *position.Result) string {
