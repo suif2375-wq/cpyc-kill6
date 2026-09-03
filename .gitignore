@@ -1,0 +1,13 @@
+# 编译产物（由 go build 生成，CI 中现场构建）
+fc3d-kill6
+*.exe
+
+# Go 临时文件
+*.test
+*.out
+
+# 本地 Go 构建缓存
+.gocache/
+
+# Agent 工作目录（会话记忆，不入库）
+.workbuddy/

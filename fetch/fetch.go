@@ -1,0 +1,199 @@
+// Package fetch 提供开奖数据双源抓取（灰鸟 API 主 + 17500.cn 备份）、
+// 期号合理性校验与跨年期号计算。
+package fetch
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"fc3d-kill6/data"
+)
+
+// Latest 从数据源获取到的最新一期
+type Latest struct {
+	Issue     string
+	Date      string
+	B, S, G   int
+	NextIssue string // 数据源自带的下期期号（跨年安全），可为空
+	Source    string
+}
+
+// FetchLatest 依次尝试数据源，返回 (新数据, 源是否存活)。
+// 期号必须 > 本地 CSV 最新期号，否则视为缓存/旧数据拒绝（防假数据）。
+// alive=true 表示至少一个源成功返回数据（即使无新期，属开奖前正常）。
+func FetchLatest(csvPath string) (*Latest, bool) {
+	lastIssue := ""
+	if draws, err := data.LoadCSV(csvPath); err == nil {
+		lastIssue = data.LastIssue(draws)
+	}
+
+	alive := false
+	sources := []struct {
+		name string
+		fn   func() (*Latest, error)
+	}{
+		{"灰鸟API", fetchHuiniao},
+		{"17500.cn", fetch17500},
+	}
+	for _, src := range sources {
+		lt, err := src.fn()
+		if err != nil || lt == nil {
+			if err != nil {
+				fmt.Printf("  ⚠️ %s: %v\n", src.name, err)
+			}
+			continue
+		}
+		alive = true
+		// 期号合理性校验
+		if lastIssue != "" && lt.Issue <= lastIssue {
+			fmt.Printf("  ⏭️ %s: 期号%s<=本地%s, 跳过(无新期, 源正常)\n", src.name, lt.Issue, lastIssue)
+			continue
+		}
+		fmt.Printf("  ✅ %s: %s (%s) %d%d%d\n", src.name, lt.Issue, lt.Date, lt.B, lt.S, lt.G)
+		return lt, true
+	}
+	return nil, alive
+}
+
+// 灰鸟 API：自带 next_code 字段，天然支持跨年期号回绕
+func fetchHuiniao() (*Latest, error) {
+	const url = "http://api.huiniao.top/interface/home/lotteryHistory?type=fcsd&page=1&limit=1"
+	body, err := httpGet(url, "")
+	if err != nil {
+		return nil, err
+	}
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			Data struct {
+				List []struct {
+					Code     string `json:"code"`
+					Day      string `json:"day"`
+					One      int    `json:"one"`
+					Two      int    `json:"two"`
+					Three    int    `json:"three"`
+					NextCode string `json:"next_code"`
+				} `json:"list"`
+			} `json:"data"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, err
+	}
+	if resp.Code != 1 || len(resp.Data.Data.List) == 0 {
+		return nil, fmt.Errorf("灰鸟API 返回异常 code=%d", resp.Code)
+	}
+	it := resp.Data.Data.List[0]
+	return &Latest{
+		Issue: it.Code, Date: it.Day,
+		B: it.One, S: it.Two, G: it.Three,
+		NextIssue: it.NextCode, Source: "灰鸟API",
+	}, nil
+}
+
+// 17500.cn：官方级全量 TXT（每行: 期号 日期 百 十 个 ...），带 429 重试
+func fetch17500() (*Latest, error) {
+	const url = "https://www.17500.cn/getData/3d.TXT"
+	uas := []string{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+		"Python-urllib/3.11",
+	}
+	var body []byte
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		body, lastErr = httpGet(url, uas[attempt%len(uas)])
+		if lastErr == nil {
+			break
+		}
+		time.Sleep(2 * time.Second) // 429 限流等待重试
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return parse17500Line(body)
+}
+
+// errTooFew 17500 数据字段不足
+var errTooFew = fmt.Errorf("17500 数据字段不足")
+
+// parse17500Line 解析 17500 全量 TXT（每行前 5 列为期号、日期、百、十、个，
+// 后面附加字段数量可能随站点调整），按行从后往前寻找最后一条有效记录。
+// 不能把整个文件 strings.Fields 后直接取尾部固定列，否则站点增加/减少
+// 附加字段时会把数字错位成期号。
+func parse17500Line(body []byte) (*Latest, error) {
+	lines := strings.Split(strings.ReplaceAll(string(body), "\r\n", "\n"), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		fields := strings.Fields(strings.TrimSpace(lines[i]))
+		if len(fields) < 5 {
+			continue
+		}
+		if lt, err := latestFromLast5(fields[0], fields[1], fields[2], fields[3], fields[4]); err == nil {
+			return lt, nil
+		}
+	}
+	return nil, errTooFew
+}
+
+func latestFromLast5(issue, date, bs, ss, gs string) (*Latest, error) {
+	if !regexp.MustCompile(`^20\d{5}$`).MatchString(issue) {
+		return nil, fmt.Errorf("17500 行尾期号解析失败: %q", issue)
+	}
+	b, e1 := strconv.Atoi(bs)
+	s, e2 := strconv.Atoi(ss)
+	g, e3 := strconv.Atoi(gs)
+	if e1 != nil || e2 != nil || e3 != nil {
+		return nil, fmt.Errorf("17500 数字解析失败")
+	}
+	return &Latest{Issue: issue, Date: date, B: b, S: s, G: g, Source: "17500.cn"}, nil
+}
+
+func httpGet(url, ua string) ([]byte, error) {
+	if ua == "" {
+		ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+	}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", ua)
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+}
+
+// NextIssueCalc 计算下一期期号，跨年安全（对齐 next_issue_calc）：
+// 1) 数据源 next_issue 优先（天然含跨年回绕）
+// 2) 兜底按开奖日期 12-31 → 次年 001
+// 3) 最后兜底 year+seq+1（补零）
+func NextIssueCalc(issue, date, nextIssue string) string {
+	if nextIssue != "" {
+		return nextIssue
+	}
+	if len(issue) >= 7 {
+		yy, err := strconv.Atoi(issue[:4])
+		seq, err2 := strconv.Atoi(issue[4:])
+		if err == nil && err2 == nil {
+			if d, err3 := time.Parse("2006-01-02", date); err3 == nil {
+				if d.Month() == 12 && d.Day() == 31 {
+					return fmt.Sprintf("%d001", yy+1)
+				}
+			}
+			return fmt.Sprintf("%d%03d", yy, seq+1)
+		}
+	}
+	return ""
+}
