@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"fc3d-kill6/backtest"
 	"fc3d-kill6/data"
@@ -197,7 +198,8 @@ func main() {
 
 func recordRecommendationHistory(path string, result *position.Result) []position.RecommendationSnapshot {
 	targetIssue := fetch.NextIssueCalc(result.Latest.Issue, result.Latest.Date, "")
-	history, err := position.RecordCurrentPrediction(path, result, targetIssue, result.Latest.Date)
+	// Date 表示本次生成推荐的日期；不要沿用上一期开奖日期，便于“从今天开始”查询。
+	history, err := position.RecordCurrentPrediction(path, result, targetIssue, time.Now().Format("2006-01-02"))
 	if err != nil {
 		fmt.Printf("  ⚠️ 推荐历史记录失败: %v\n", err)
 		return nil
