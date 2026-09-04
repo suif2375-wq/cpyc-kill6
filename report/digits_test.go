@@ -36,3 +36,28 @@ func TestUpdateDigitFooterDates(t *testing.T) {
 		}
 	}
 }
+
+func TestDigitPaneUsesDisplayRateOnlyForPresentation(t *testing.T) {
+	res := &position.Result{
+		Positions:            3,
+		KillCount:            2,
+		Total:                120,
+		RecentN:              100,
+		RecentRate:           55,
+		DisplayRecentRate:    80,
+		DisplayRecentRateSet: true,
+		BaselineAll:          51.2,
+		AllRate:              55,
+		Latest:               data.DigitDraw{Issue: "2026237", Date: "2026-09-04", Digits: []int{9, 5, 0}},
+		Prediction:           position.Prediction{Kills: [][]int{{1, 2}, {3, 4}, {5, 6}}, Models: []position.Model{position.ModelV9Local, position.ModelV9Local, position.ModelV9Local}},
+	}
+	html := renderDigitPane("排列3", "p3", "test", res)
+	if !strings.Contains(html, "<strong>80.0%") || !strings.Contains(html, "全量 55.0%") {
+		t.Fatalf("display rate not isolated correctly: %s", html)
+	}
+	res.DisplayRecentRate = 0
+	html = renderDigitPane("排列3", "p3", "test", res)
+	if !strings.Contains(html, "<strong>0.0%") {
+		t.Fatalf("zero display rate should not fall back: %s", html)
+	}
+}

@@ -14,6 +14,7 @@ func main() {
 	path := flag.String("csv", "p5-history.csv", "数字型彩票 CSV")
 	positions := flag.Int("positions", 5, "位数")
 	window := flag.Int("window", 120, "近期窗口")
+	top := flag.Int("top", 10, "推荐组数")
 	flag.Parse()
 	draws, err := data.LoadDigitCSV(*path, *positions)
 	if err != nil {
@@ -24,6 +25,7 @@ func main() {
 	for _, st := range res.Stats {
 		fmt.Printf("pos%d rate=%.2f baseline=%.2f model=%s n=%d\n", st.Position, st.Rate, st.Baseline, st.Model, st.N)
 	}
+	probeRecommendationCoverage(draws, *top)
 	if *positions == 3 {
 		legacy := make([]data.Draw, len(draws))
 		for i, d := range draws {
@@ -37,6 +39,37 @@ func main() {
 		probeP5Adaptive(draws)
 		probeP5Fixed(draws)
 	}
+}
+
+func probeRecommendationCoverage(draws []data.DigitDraw, top int) {
+	if len(draws) < 150 {
+		return
+	}
+	checks := 100
+	start := len(draws) - checks
+	exact, two := 0, 0
+	for t := start; t < len(draws); t++ {
+		history := draws[:t]
+		pred := position.Predict(history, 2, 120)
+		recs := position.GenerateRecommendations(history, pred, top)
+		for _, rec := range recs {
+			matches := 0
+			for p, d := range rec.Digits {
+				if d == draws[t].Digits[p] {
+					matches++
+				}
+			}
+			if matches == len(draws[t].Digits) {
+				exact++
+				break
+			}
+			if matches >= 2 {
+				two++
+				break
+			}
+		}
+	}
+	fmt.Printf("recommend-top%d recent%d exact=%.2f%% two+pos=%.2f%%\n", top, checks, pct(exact, checks), pct(two, checks))
 }
 
 func probeP5(draws []data.DigitDraw) {
