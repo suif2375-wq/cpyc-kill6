@@ -198,7 +198,6 @@ func Backtest(draws []data.DigitDraw, killCount, window int) *Result {
 	res.Latest = latest
 	res.Prediction = Predict(draws, killCount, window)
 	res.Recommendations = GenerateRecommendations(draws, res.Prediction, 10)
-	res.RecommendationHistory = GenerateRecommendationHistory(draws, killCount, window, 100)
 	res.AllN, res.AllHit = allN, allHit
 	res.AllRate = pct(allHit, allN)
 	res.BaselineAll = math.Pow(1-float64(killCount)/10, float64(positions)) * 100

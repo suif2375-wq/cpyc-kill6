@@ -27,6 +27,8 @@ func main() {
 	csvPath := flag.String("csv", "fc3d-history.csv", "福彩3D CSV 路径")
 	p3CSVPath := flag.String("p3-csv", "p3-history.csv", "排列3 CSV 路径")
 	p5CSVPath := flag.String("p5-csv", "p5-history.csv", "排列5 CSV 路径")
+	p3RecHistoryPath := flag.String("p3-recommend-history", "p3-recommend-history.json", "排列3推荐历史路径")
+	p5RecHistoryPath := flag.String("p5-recommend-history", "p5-recommend-history.json", "排列5推荐历史路径")
 	skipDigitSync := flag.Bool("skip-digit-sync", false, "跳过排列3/5网络同步，仅使用本地CSV")
 	ssqCSVPath := flag.String("ssq-csv", "ssq-history.csv", "双色球 CSV 路径")
 	htmlPath := flag.String("html", "index.html", "输出 HTML 路径")
@@ -158,6 +160,7 @@ func main() {
 	var p3Res, p5Res *position.Result
 	if len(p3Draws) >= 80 {
 		p3Res = position.Backtest(p3Draws, 2, 120)
+		p3Res.RecommendationHistory = recordRecommendationHistory(*p3RecHistoryPath, p3Res)
 		fmt.Printf("  📊 排列3: %d期 · 全位避开%.1f%% (随机基线%.1f%%) · 本期%s\n",
 			p3Res.Total, p3Res.AllRate, p3Res.BaselineAll, position.FormatPrediction(p3Res.Prediction))
 	} else {
@@ -165,6 +168,7 @@ func main() {
 	}
 	if len(p5Draws) >= 80 {
 		p5Res = position.Backtest(p5Draws, 2, 120)
+		p5Res.RecommendationHistory = recordRecommendationHistory(*p5RecHistoryPath, p5Res)
 		fmt.Printf("  📊 排列5: %d期 · 全位避开%.1f%% (随机基线%.1f%%) · 本期%s\n",
 			p5Res.Total, p5Res.AllRate, p5Res.BaselineAll, position.FormatPrediction(p5Res.Prediction))
 	} else {
@@ -189,6 +193,16 @@ func main() {
 	fmt.Printf("\n🔮 3D下一期: %s | 百杀%d,%d 十杀%d,%d 个杀%d,%d\n",
 		nextIssue, p.H, p.H2, p.T, p.T2, p.O, p.O2)
 	fmt.Printf("✅ HTML已生成 (%s, %d字节)\n", *htmlPath, len(html))
+}
+
+func recordRecommendationHistory(path string, result *position.Result) []position.RecommendationSnapshot {
+	targetIssue := fetch.NextIssueCalc(result.Latest.Issue, result.Latest.Date, "")
+	history, err := position.RecordCurrentPrediction(path, result, targetIssue, result.Latest.Date)
+	if err != nil {
+		fmt.Printf("  ⚠️ 推荐历史记录失败: %v\n", err)
+		return nil
+	}
+	return history
 }
 
 func loadOrSyncDigits(kind, path string, positions int, skipSync bool) []data.DigitDraw {
