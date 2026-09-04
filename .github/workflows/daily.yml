@@ -50,7 +50,7 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add fc3d-history.csv p3-history.csv p5-history.csv ssq-history.csv p3-recommend-history.json p5-recommend-history.json p3-display-rate.json p5-display-rate.json index.html kill6_history.json
+          git add fc3d-history.csv p3-history.csv p5-history.csv ssq-history.csv p3-recommend-history.json p5-recommend-history.json index.html kill6_history.json
           if git diff --cached --quiet; then
             echo "无变更"
           else

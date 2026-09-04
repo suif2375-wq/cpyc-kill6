@@ -85,23 +85,20 @@ type recommendationCandidate struct {
 
 // Result 是排列3/排列5页面所需的完整结果。
 type Result struct {
-	Positions   int
-	KillCount   int
-	Window      int
-	Total       int
-	Latest      data.DigitDraw
-	Prediction  Prediction
-	Stats       []PositionStat
-	AllN        int
-	AllHit      int
-	AllRate     float64
-	BaselineAll float64
-	RecentN     int
-	RecentHit   int
-	RecentRate  float64
-	// DisplayRecentRate 仅供页面展示，不参与预测或回测计算。
-	DisplayRecentRate     float64
-	DisplayRecentRateSet  bool
+	Positions             int
+	KillCount             int
+	Window                int
+	Total                 int
+	Latest                data.DigitDraw
+	Prediction            Prediction
+	Stats                 []PositionStat
+	AllN                  int
+	AllHit                int
+	AllRate               float64
+	BaselineAll           float64
+	RecentN               int
+	RecentHit             int
+	RecentRate            float64
 	RecentStats           []PositionStat
 	Recommendations       []Recommendation
 	RecommendationHistory []RecommendationSnapshot

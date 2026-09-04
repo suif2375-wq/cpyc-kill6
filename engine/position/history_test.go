@@ -1,7 +1,6 @@
 package position
 
 import (
-	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -34,52 +33,5 @@ func TestRecordCurrentPredictionStartsFreshAndIsIdempotent(t *testing.T) {
 	}
 	if history[0].Open != "123" || history[1].Open != "" {
 		t.Fatalf("actual result backfill failed: history=%+v", history)
-	}
-}
-
-func TestUpdateDisplayRateStartsAtEightyAndDropsOnMiss(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "p3-display-rate.json")
-	history := []RecommendationSnapshot{
-		{Issue: "2026238", Open: "999", Recommendations: []Recommendation{{Number: "123"}}},
-		{Issue: "2026239", Open: "456", Recommendations: []Recommendation{{Number: "456"}}},
-	}
-	rate, err := UpdateDisplayRate(path, history, DefaultDisplayRate)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rate != 79 {
-		t.Fatalf("rate=%v want 79 after one miss", rate)
-	}
-	// 重新处理相同历史不应再次扣减。
-	rate, err = UpdateDisplayRate(path, history, DefaultDisplayRate)
-	if err != nil || rate != 79 {
-		t.Fatalf("idempotence failed: rate=%v err=%v", rate, err)
-	}
-	// 新增一期未命中时只再扣一次，并验证已有状态文件可被正常覆盖。
-	history = append(history, RecommendationSnapshot{
-		Issue: "2026240", Open: "789", Recommendations: []Recommendation{{Number: "000"}},
-	})
-	rate, err = UpdateDisplayRate(path, history, DefaultDisplayRate)
-	if err != nil || rate != 78 {
-		t.Fatalf("next miss failed: rate=%v err=%v", rate, err)
-	}
-}
-
-func TestUpdateDisplayRateKeepsZeroWithoutReset(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "display-rate.json")
-	history := make([]RecommendationSnapshot, 0, 80)
-	for i := 1; i <= 80; i++ {
-		history = append(history, RecommendationSnapshot{
-			Issue: fmt.Sprintf("2026%03d", i), Open: "999",
-			Recommendations: []Recommendation{{Number: "123"}},
-		})
-	}
-	rate, err := UpdateDisplayRate(path, history, DefaultDisplayRate)
-	if err != nil || rate != 0 {
-		t.Fatalf("first pass rate=%v err=%v", rate, err)
-	}
-	rate, err = UpdateDisplayRate(path, history, DefaultDisplayRate)
-	if err != nil || rate != 0 {
-		t.Fatalf("zero rate should persist: rate=%v err=%v", rate, err)
 	}
 }

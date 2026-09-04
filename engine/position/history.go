@@ -6,63 +6,6 @@ import (
 	"os"
 )
 
-// DefaultDisplayRate 是排列3/排列5页面“近100期全位同时避开率”的展示初始值。
-// 它只用于展示层，不参与任何预测、回测、推荐或模型选择计算。
-const DefaultDisplayRate = 80.0
-
-type displayRateState struct {
-	Rate               float64 `json:"rate"`
-	LastProcessedIssue string  `json:"last_processed_issue"`
-}
-
-// UpdateDisplayRate 更新展示层独立指标：首次从 initial 开始；已记录推荐期
-// 开奖后若10组中没有完整命中号码，则下降1个百分点。命中时保持不变。
-func UpdateDisplayRate(path string, history []RecommendationSnapshot, initial float64) (float64, error) {
-	if initial <= 0 || initial > 100 {
-		initial = DefaultDisplayRate
-	}
-	state := displayRateState{Rate: initial}
-	if raw, err := os.ReadFile(path); err == nil && len(raw) > 0 {
-		if err := json.Unmarshal(raw, &state); err != nil {
-			return initial, fmt.Errorf("parse display rate state: %w", err)
-		}
-	} else if err != nil && !os.IsNotExist(err) {
-		return initial, err
-	}
-	if state.Rate < 0 || state.Rate > 100 {
-		state.Rate = initial
-	}
-	for _, record := range history {
-		if record.Open == "" || (state.LastProcessedIssue != "" && record.Issue <= state.LastProcessedIssue) {
-			continue
-		}
-		if !recommendationContains(record.Recommendations, record.Open) {
-			state.Rate--
-			if state.Rate < 0 {
-				state.Rate = 0
-			}
-		}
-		state.LastProcessedIssue = record.Issue
-	}
-	raw, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return state.Rate, err
-	}
-	if err := replaceFile(path, raw); err != nil {
-		return state.Rate, err
-	}
-	return state.Rate, nil
-}
-
-func recommendationContains(recommendations []Recommendation, open string) bool {
-	for _, rec := range recommendations {
-		if rec.Number == open {
-			return true
-		}
-	}
-	return false
-}
-
 // LoadRecommendationHistory 读取持久化推荐记录。
 // 不存在文件时返回空记录，便于首次部署从当前预测开始记录。
 func LoadRecommendationHistory(path string) ([]RecommendationSnapshot, error) {

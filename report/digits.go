@@ -79,10 +79,6 @@ func renderDigitPane(title, key, desc string, res *position.Result) string {
 		b.WriteString(`<p class="digit-muted">暂无历史数据。运行程序后会自动同步 17500.cn 的完整历史并生成回测。</p></section></main></div>`)
 		return b.String()
 	}
-	displayRate := res.RecentRate
-	if res.DisplayRecentRateSet {
-		displayRate = res.DisplayRecentRate
-	}
 	next := nextIssue(res.Latest.Issue, res.Latest.Date)
 	b.WriteString(`<p class="digit-sub">下一期参考 · 第 <strong>` + html.EscapeString(next) + `</strong> 期。每个位排除 ` + fmt.Sprintf("%d", res.KillCount) + ` 个数字，结果仅基于开奖前历史数据。</p>`)
 	b.WriteString(`<div class="digit-note">杀码是排除数字，不是预测开奖号码。主杀号使用经过长期滚动验证的 V9 局部公式；lottery-analyzer 的跨期胆码/毒胆规律作为推荐组合的软评分特征，并同步显示随机基线。</div>`)
@@ -109,7 +105,7 @@ func renderDigitPane(title, key, desc string, res *position.Result) string {
 	b.WriteString(`</section>`)
 
 	b.WriteString(`<section class="digit-section"><div class="digit-section-head"><h2>滚动回测</h2><span>近` + fmt.Sprintf("%d", res.RecentN) + `期 · 全量 ` + fmt.Sprintf("%.1f", res.AllRate) + `% · 随机基线 ` + fmt.Sprintf("%.1f", res.BaselineAll) + `%</span></div>`)
-	b.WriteString(`<div class="digit-summary"><div class="digit-summary-main"><span>近` + fmt.Sprintf("%d", res.RecentN) + `期全位同时避开率</span><strong>` + fmt.Sprintf("%.1f%%", displayRate) + `</strong><em>` + fmt.Sprintf("较随机基线 %+.1fpp · 全量 %.1f%%", displayRate-res.BaselineAll, res.AllRate) + `</em><div class="digit-bar"><i style="width:` + fmt.Sprintf("%.1f", clamp(displayRate)) + `%"></i></div></div><div class="digit-stats">`)
+	b.WriteString(`<div class="digit-summary"><div class="digit-summary-main"><span>近` + fmt.Sprintf("%d", res.RecentN) + `期全位同时避开率</span><strong>` + fmt.Sprintf("%.1f%%", res.RecentRate) + `</strong><em>` + fmt.Sprintf("较随机基线 %+.1fpp · 全量 %.1f%%", res.RecentRate-res.BaselineAll, res.AllRate) + `</em><div class="digit-bar"><i style="width:` + fmt.Sprintf("%.1f", clamp(res.RecentRate)) + `%"></i></div></div><div class="digit-stats">`)
 	stats := res.RecentStats
 	if len(stats) == 0 {
 		stats = res.Stats

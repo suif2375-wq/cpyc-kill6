@@ -23,7 +23,9 @@ type Data struct {
 
 // Banners 页面顶部横幅
 type Banners struct {
-	DataFailed bool // 数据源全挂（橙条）
+	DataUpgrade    bool // 算法表现预警（红条）
+	UpgradeReasons []string
+	DataFailed     bool // 数据源全挂（橙条）
 }
 
 // SSQView 双色球页签数据（统计工具版）
@@ -288,6 +290,9 @@ h1{font-size:44px;font-weight:700;letter-spacing:.5px}
 .cmp-label{font-size:10px;color:var(--text3)}
 .warn{display:flex;align-items:center;gap:12px;padding:18px 22px;margin-top:40px;border-radius:12px;background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.4);font-size:13px;color:#FDBA74;line-height:1.7}
 .warn-icon{width:22px;height:22px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;background:rgba(251,191,36,.14);border:1.5px solid rgba(251,191,36,.6);font:700 13px var(--font-num);color:var(--amber)}
+.upgrade-alert{display:flex;flex-direction:column;gap:6px;padding:16px 22px;border-radius:12px;margin-bottom:24px;background:linear-gradient(135deg,rgba(185,28,28,.85),rgba(220,38,38,.8));border:1px solid rgba(248,113,113,.5);font-size:13px;line-height:1.7;color:#FECACA}
+.upgrade-alert .ua-title{font-size:15px;font-weight:800;color:#FEE2E2}
+.upgrade-alert .ua-sub{font-size:11px;opacity:.85}
 .data-alert{display:flex;flex-direction:column;gap:6px;padding:16px 22px;border-radius:12px;margin-bottom:24px;background:linear-gradient(135deg,rgba(230,81,0,.85),rgba(245,124,0,.8));border:1px solid rgba(251,146,60,.5);font-size:13px;line-height:1.7;color:#FED7AA}
 .data-alert .da-title{font-size:15px;font-weight:800;color:#FFEDD5}
 .table-wrap{border-radius:14px;border:1px solid var(--border);overflow:hidden;background:rgba(18,26,43,.6)}
@@ -450,6 +455,10 @@ footer{padding:22px 0 10px;gap:8px}
 {{if .Banners.DataFailed}}
 <div class="data-alert"><div class="da-title">数据源异常</div>所有数据源获取失败，页面为最后一次成功数据，请检查数据源（灰鸟 / 17500.cn）。</div>
 {{end}}
+{{if .Banners.DataUpgrade}}
+<div class="upgrade-alert"><div class="ua-title">算法表现预警</div>滚动 100 期 6 杀全中率出现明显下滑：<br>{{range .Banners.UpgradeReasons}}• {{.}}<br>{{end}}<span class="ua-sub">预警条件：滚动100期跌破 70% 或 单月下滑超 8pp · 仅作趋势监控参考</span></div>
+{{end}}
+
     <section class="hero">
       <div class="hero-top">
         <div class="hero-left">

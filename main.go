@@ -30,8 +30,6 @@ func main() {
 	p5CSVPath := flag.String("p5-csv", "p5-history.csv", "排列5 CSV 路径")
 	p3RecHistoryPath := flag.String("p3-recommend-history", "p3-recommend-history.json", "排列3推荐历史路径")
 	p5RecHistoryPath := flag.String("p5-recommend-history", "p5-recommend-history.json", "排列5推荐历史路径")
-	p3DisplayRatePath := flag.String("p3-display-rate", "p3-display-rate.json", "排列3展示率状态路径")
-	p5DisplayRatePath := flag.String("p5-display-rate", "p5-display-rate.json", "排列5展示率状态路径")
 	skipDigitSync := flag.Bool("skip-digit-sync", false, "跳过排列3/5网络同步，仅使用本地CSV")
 	ssqCSVPath := flag.String("ssq-csv", "ssq-history.csv", "双色球 CSV 路径")
 	htmlPath := flag.String("html", "index.html", "输出 HTML 路径")
@@ -111,8 +109,17 @@ func main() {
 			s.Kind.Short(), s.N, s.Rate, s.Base, s.FullRate, picks)
 	}
 
-	// Step 4: 仅保留趋势历史记录。
-	_, _ = monitor.Record(*kill6Path, m.Period6Pct100, m.LatestIssue, m.LatestDate)
+	// Step 4: 趋势记录与表现预警
+	hist, _ := monitor.Record(*kill6Path, m.Period6Pct100, m.LatestIssue, m.LatestDate)
+	triggered, reasons, monthDrop := monitor.CheckAlert(m.Period6Pct100, hist)
+	if triggered {
+		fmt.Println("\n🚨🚨🚨 算法表现预警：滚动 100 期 6 杀全中率明显下滑 🚨🚨🚨")
+		for _, r := range reasons {
+			fmt.Printf("   ⚠️ %s\n", r)
+		}
+	} else {
+		fmt.Printf("   ✅ 表现监控: 正常 (单月%+.1fpp, 预警阈值跌破70%%/月降8pp)\n", monthDrop)
+	}
 
 	// Step 4.5: 双色球（统计工具版）
 	fmt.Println("\n🎱 双色球统计...")
@@ -155,7 +162,6 @@ func main() {
 	if len(p3Draws) >= 80 {
 		p3Res = position.Backtest(p3Draws, 2, 120)
 		p3Res.RecommendationHistory = recordRecommendationHistory(*p3RecHistoryPath, p3Res)
-		p3Res.DisplayRecentRate, p3Res.DisplayRecentRateSet = updateDisplayRate(*p3DisplayRatePath, p3Res.RecommendationHistory)
 		fmt.Printf("  📊 排列3: %d期 · 全位避开%.1f%% (随机基线%.1f%%) · 本期%s\n",
 			p3Res.Total, p3Res.AllRate, p3Res.BaselineAll, position.FormatPrediction(p3Res.Prediction))
 	} else {
@@ -164,7 +170,6 @@ func main() {
 	if len(p5Draws) >= 80 {
 		p5Res = position.Backtest(p5Draws, 2, 120)
 		p5Res.RecommendationHistory = recordRecommendationHistory(*p5RecHistoryPath, p5Res)
-		p5Res.DisplayRecentRate, p5Res.DisplayRecentRateSet = updateDisplayRate(*p5DisplayRatePath, p5Res.RecommendationHistory)
 		fmt.Printf("  📊 排列5: %d期 · 全位避开%.1f%% (随机基线%.1f%%) · 本期%s\n",
 			p5Res.Total, p5Res.AllRate, p5Res.BaselineAll, position.FormatPrediction(p5Res.Prediction))
 	} else {
@@ -173,7 +178,7 @@ func main() {
 
 	// Step 5: 生成 HTML
 	nextIssue := fetch.NextIssueCalc(m.LatestIssue, m.LatestDate, nextIssueHint(newData))
-	banners := report.Banners{DataFailed: !dataAlive}
+	banners := report.Banners{DataUpgrade: triggered, UpgradeReasons: reasons, DataFailed: !dataAlive}
 	html, err := report.GenerateHTML(m, bt.Pred, bt.Rows, banners, nextIssue, wf, ssqView, pat)
 	if err != nil {
 		fmt.Printf("❌ HTML 生成失败: %v\n", err)
@@ -200,15 +205,6 @@ func recordRecommendationHistory(path string, result *position.Result) []positio
 		return nil
 	}
 	return history
-}
-
-func updateDisplayRate(path string, history []position.RecommendationSnapshot) (float64, bool) {
-	rate, err := position.UpdateDisplayRate(path, history, position.DefaultDisplayRate)
-	if err != nil {
-		fmt.Printf("  ⚠️ 展示率状态更新失败 (%s): %v\n", path, err)
-		return 0, false
-	}
-	return rate, true
 }
 
 func loadOrSyncDigits(kind, path string, positions int, skipSync bool) []data.DigitDraw {
