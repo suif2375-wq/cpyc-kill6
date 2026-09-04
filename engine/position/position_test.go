@@ -83,3 +83,48 @@ func TestGenerateRecommendationsP5(t *testing.T) {
 		}
 	}
 }
+
+func TestPredictionKillsAreDistinct(t *testing.T) {
+	for _, positions := range []int{3, 5} {
+		pred := Predict(makeDraws(120, positions), 2, 60)
+		for p, kills := range pred.Kills {
+			if len(kills) != 2 || kills[0] == kills[1] {
+				t.Fatalf("positions=%d pos=%d duplicate kills: %v", positions, p, kills)
+			}
+		}
+	}
+}
+
+func TestP5PrefixMatchesP3(t *testing.T) {
+	p3Draws := makeDraws(120, 3)
+	p5Draws := makeDraws(120, 5)
+	p3 := Predict(p3Draws, 2, 60)
+	p5 := Predict(p5Draws, 2, 60)
+	for p := 0; p < 3; p++ {
+		if len(p3.Kills[p]) != len(p5.Kills[p]) || p3.Kills[p][0] != p5.Kills[p][0] || p3.Kills[p][1] != p5.Kills[p][1] {
+			t.Fatalf("prefix mismatch at pos %d: p3=%v p5=%v", p, p3.Kills[p], p5.Kills[p])
+		}
+	}
+}
+
+func TestRecommendationsAreDiversified(t *testing.T) {
+	for _, positions := range []int{3, 5} {
+		draws := makeDraws(150, positions)
+		pred := Predict(draws, 2, 60)
+		recs := GenerateRecommendations(draws, pred, 10)
+		if len(recs) != 10 {
+			t.Fatalf("positions=%d recommendations=%d", positions, len(recs))
+		}
+		minDiff := 2
+		if positions == 5 {
+			minDiff = 3
+		}
+		for i := 0; i < len(recs); i++ {
+			for j := i + 1; j < len(recs); j++ {
+				if digitDistance(recs[i].Digits, recs[j].Digits) < minDiff {
+					t.Fatalf("positions=%d recommendations too similar: %v %v", positions, recs[i], recs[j])
+				}
+			}
+		}
+	}
+}

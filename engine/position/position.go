@@ -368,27 +368,42 @@ func GenerateRecommendations(draws []data.DigitDraw, pred Prediction, count int)
 	})
 
 	selected := make([]recommendationCandidate, 0, count)
+	// 10组推荐不应只是同一组号码的微小变体：排列3至少要求相差2个位，
+	// 排列5至少相差3个位；候选不足时再逐级放宽，保证始终尽量生成足量组合。
+	minDiff := 2
+	if positions >= 5 {
+		minDiff = 3
+	}
 	for len(selected) < count && len(selected) < len(candidates) {
 		bestIdx, bestScore := -1, -1e100
 		for i, cand := range candidates {
 			if containsCandidate(selected, cand.digits) {
 				continue
 			}
+			validDistance := true
+			for _, picked := range selected {
+				if digitDistance(cand.digits, picked.digits) < minDiff {
+					validDistance = false
+					break
+				}
+			}
+			if len(selected) > 0 && !validDistance {
+				continue
+			}
 			adjusted := cand.raw
 			for _, picked := range selected {
-				overlap := 0
-				for p := range cand.digits {
-					if cand.digits[p] == picked.digits[p] {
-						overlap++
-					}
-				}
-				adjusted -= 0.025 * float64(overlap)
+				overlap := len(cand.digits) - digitDistance(cand.digits, picked.digits)
+				adjusted -= 0.08 * float64(overlap)
 			}
 			if adjusted > bestScore {
 				bestIdx, bestScore = i, adjusted
 			}
 		}
 		if bestIdx < 0 {
+			if minDiff > 1 {
+				minDiff--
+				continue
+			}
 			break
 		}
 		selected = append(selected, candidates[bestIdx])
@@ -467,6 +482,20 @@ func containsCandidate(cands []recommendationCandidate, digits []int) bool {
 		}
 	}
 	return false
+}
+
+func digitDistance(a, b []int) int {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+	diff := 0
+	for i := 0; i < n; i++ {
+		if a[i] != b[i] {
+			diff++
+		}
+	}
+	return diff + int(math.Abs(float64(len(a)-len(b))))
 }
 
 func maxInt(a, b int) int {
@@ -629,6 +658,12 @@ func v9LocalKills(draws []data.DigitDraw, pos int) []int {
 	if positions == 3 {
 		return v9StatefulKills(draws, pos)
 	}
+	// 排列5的万/千/百位与排列3的百/十/个位使用同一组前三位开奖数据。
+	// 为保证两个彩种页面口径一致，前三位严格复用三位 V9 状态机；只有
+	// 十位、个位才使用排列5专属的局部三位上下文。
+	if positions >= 5 && pos < 3 {
+		return v9StatefulKills(draws, pos)
+	}
 	if positions >= 5 {
 		ctx = [5][3]int{{0, 1, 2}, {0, 1, 2}, {1, 2, 3}, {2, 3, 4}, {2, 3, 4}}[pos]
 		slot = [5]int{0, 1, 1, 1, 2}[pos]
@@ -643,7 +678,7 @@ func v9LocalKills(draws []data.DigitDraw, pos int) []int {
 	default:
 		k1, k2 = engine.KillO(b, s, g, nil, len(draws)), engine.KillO2(b, s, g)
 	}
-	return []int{k1, k2}
+	return distinctKills(k1, k2, slot, b, s, g)
 }
 
 func v9StatefulKills(draws []data.DigitDraw, pos int) []int {
@@ -666,7 +701,32 @@ func v9StatefulKills(draws []data.DigitDraw, pos int) []int {
 	default:
 		k1, k2 = engine.ApplyFB(engine.KillO(b, s, g, st.OFail, len(draws)), st.POK, engine.OFb, b, s, g), engine.KillO2(b, s, g)
 	}
-	return []int{k1, k2}
+	return distinctKills(k1, k2, pos, b, s, g)
+}
+
+// distinctKills 保证每个位的双杀号始终是两个不同数字。
+// 原始 V9 的两个公式偶尔会给出同一个数字；这里优先使用同一期开奖上下文
+// 的其它独立公式作为第二候选，最后才使用确定性的偏移，避免页面出现“9,9”
+// 这类无效双杀号，同时不改动 engine 包的 golden 基准。
+func distinctKills(k1, k2, slot, b, s, g int) []int {
+	if k1 != k2 {
+		return []int{k1, k2}
+	}
+	var alternatives []int
+	switch slot {
+	case 0:
+		alternatives = []int{(k1 + 1) % 10, engine.KillT(b, s, g), engine.KillO(b, s, g, nil, 0), engine.KillH2(b, s, g), (k1 + 3) % 10}
+	case 1:
+		alternatives = []int{(k1 + 1) % 10, engine.KillH(b, s, g), engine.KillO(b, s, g, nil, 0), engine.KillT2(b, s, g), (k1 + 3) % 10}
+	default:
+		alternatives = []int{(k1 + 1) % 10, engine.KillH(b, s, g), engine.KillT(b, s, g), engine.KillO2(b, s, g), (k1 + 3) % 10}
+	}
+	for _, alt := range alternatives {
+		if alt != k1 {
+			return []int{k1, alt}
+		}
+	}
+	return []int{k1, (k1 + 1) % 10}
 }
 
 func frequencyScores(draws []data.DigitDraw, pos, window int) []float64 {
