@@ -847,6 +847,37 @@ footer{padding:22px 0 10px;gap:8px}
       input.focus();
     }
   });
+
+  document.querySelectorAll('[data-digit-history-toggle]').forEach(function (button) {
+    var panel = document.getElementById(button.getAttribute('data-digit-history-toggle'));
+    if (!panel) return;
+    var search = panel.querySelector('[data-digit-history-search]');
+    var items = Array.prototype.slice.call(panel.querySelectorAll('[data-digit-history-issue]'));
+    var count = panel.querySelector('[data-digit-history-count]');
+    var empty = panel.querySelector('[data-digit-history-empty]');
+    function filterHistory() {
+      var query = (search ? search.value : '').trim();
+      var visible = 0;
+      items.forEach(function (item) {
+        var matched = !query || item.getAttribute('data-digit-history-issue').indexOf(query) !== -1;
+        item.hidden = !matched;
+        if (matched) visible += 1;
+      });
+      if (count) count.textContent = '匹配 ' + visible + ' 期';
+      if (empty) empty.hidden = visible !== 0;
+    }
+    button.addEventListener('click', function () {
+      var opening = panel.hidden;
+      panel.hidden = !opening;
+      button.setAttribute('aria-expanded', opening ? 'true' : 'false');
+      if (opening) {
+        filterHistory();
+        if (search) search.focus();
+      }
+    });
+    if (search) search.addEventListener('input', filterHistory);
+    filterHistory();
+  });
 })();
 </script>
 </body>

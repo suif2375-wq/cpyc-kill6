@@ -128,3 +128,46 @@ func TestRecommendationsAreDiversified(t *testing.T) {
 		}
 	}
 }
+
+func TestRecommendationsBalanceFirstPosition(t *testing.T) {
+	for _, positions := range []int{3, 5} {
+		draws := makeDraws(160, positions)
+		pred := Predict(draws, 2, 60)
+		recs := GenerateRecommendations(draws, pred, 10)
+		if len(recs) != 10 {
+			t.Fatalf("positions=%d recommendations=%d", positions, len(recs))
+		}
+		counts := map[int]int{}
+		for _, rec := range recs {
+			counts[rec.Digits[0]]++
+		}
+		maxCount := 0
+		for _, n := range counts {
+			if n > maxCount {
+				maxCount = n
+			}
+		}
+		if maxCount > 2 {
+			t.Fatalf("positions=%d first digit overly concentrated: %v", positions, counts)
+		}
+	}
+}
+
+func TestRecommendationHistoryUsesPriorData(t *testing.T) {
+	draws := makeDraws(36, 3)
+	history := GenerateRecommendationHistory(draws, 2, 60, 5)
+	if len(history) != 5 {
+		t.Fatalf("history count=%d want 5", len(history))
+	}
+	if history[0].Issue != draws[len(draws)-1].Issue || len(history[0].Recommendations) != 10 {
+		t.Fatalf("latest history mismatch: %+v", history[0])
+	}
+	if history[0].Open != digitsString(draws[len(draws)-1].Digits) {
+		t.Fatalf("history open mismatch: %q", history[0].Open)
+	}
+	for i := 1; i < len(history); i++ {
+		if history[i-1].Issue <= history[i].Issue {
+			t.Fatalf("history should be newest first: %+v", history)
+		}
+	}
+}

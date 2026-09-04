@@ -4,15 +4,12 @@ on:
   push:
     branches: [main]   # 代码变更推送后立即构建并部署 Pages
   schedule:
-    # 北京时间 22:00-04:00 每小时尝试一次，覆盖 GitHub cron 延迟和数据源晚到场景。
+    # 北京时间 21:16、21:26、21:30、22:00（GitHub Actions 使用 UTC）。
     # 只在发现新期号时提交，重复运行不会产生空提交。
+    - cron: '16 13 * * *'
+    - cron: '26 13 * * *'
+    - cron: '30 13 * * *'
     - cron: '0 14 * * *'
-    - cron: '0 15 * * *'
-    - cron: '0 16 * * *'
-    - cron: '0 17 * * *'
-    - cron: '0 18 * * *'
-    - cron: '0 19 * * *'
-    - cron: '0 20 * * *'
   workflow_dispatch:  # 手动触发
 
 concurrency:

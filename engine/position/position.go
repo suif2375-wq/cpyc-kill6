@@ -66,6 +66,15 @@ type Recommendation struct {
 	Reasons []string
 }
 
+// RecommendationSnapshot 是某一期开奖前生成的10组推荐记录。
+// Open 用于页面查询时展示该期实际开奖号码，推荐本身仍只来自该期之前的数据。
+type RecommendationSnapshot struct {
+	Issue           string
+	Date            string
+	Open            string
+	Recommendations []Recommendation
+}
+
 type recommendationCandidate struct {
 	digits []int
 	raw    float64
@@ -76,24 +85,25 @@ type recommendationCandidate struct {
 
 // Result 是排列3/排列5页面所需的完整结果。
 type Result struct {
-	Positions       int
-	KillCount       int
-	Window          int
-	Total           int
-	Latest          data.DigitDraw
-	Prediction      Prediction
-	Stats           []PositionStat
-	AllN            int
-	AllHit          int
-	AllRate         float64
-	BaselineAll     float64
-	RecentN         int
-	RecentHit       int
-	RecentRate      float64
-	RecentStats     []PositionStat
-	Recommendations []Recommendation
-	Rows            []Row
-	Trend           []float64
+	Positions             int
+	KillCount             int
+	Window                int
+	Total                 int
+	Latest                data.DigitDraw
+	Prediction            Prediction
+	Stats                 []PositionStat
+	AllN                  int
+	AllHit                int
+	AllRate               float64
+	BaselineAll           float64
+	RecentN               int
+	RecentHit             int
+	RecentRate            float64
+	RecentStats           []PositionStat
+	Recommendations       []Recommendation
+	RecommendationHistory []RecommendationSnapshot
+	Rows                  []Row
+	Trend                 []float64
 }
 
 // Predict 计算下一期各位排除数字。draws 必须按时间正序。
@@ -188,6 +198,7 @@ func Backtest(draws []data.DigitDraw, killCount, window int) *Result {
 	res.Latest = latest
 	res.Prediction = Predict(draws, killCount, window)
 	res.Recommendations = GenerateRecommendations(draws, res.Prediction, 10)
+	res.RecommendationHistory = GenerateRecommendationHistory(draws, killCount, window, 100)
 	res.AllN, res.AllHit = allN, allHit
 	res.AllRate = pct(allHit, allN)
 	res.BaselineAll = math.Pow(1-float64(killCount)/10, float64(positions)) * 100
@@ -240,6 +251,39 @@ func Backtest(draws []data.DigitDraw, killCount, window int) *Result {
 	res.Rows = rows
 	res.Trend = trend(rows)
 	return res
+}
+
+// GenerateRecommendationHistory 为最近 limit 个已开奖期生成推荐记录。
+// 第 t 期的推荐只使用 draws[:t]，因此不会把该期开奖号码泄漏到推荐中。
+// 该记录用于页面按期号查询，不参与主杀号回测统计。
+func GenerateRecommendationHistory(draws []data.DigitDraw, killCount, window, limit int) []RecommendationSnapshot {
+	if len(draws) < 2 || limit <= 0 {
+		return nil
+	}
+	if limit > len(draws)-1 {
+		limit = len(draws) - 1
+	}
+	start := len(draws) - limit
+	if start < 1 {
+		start = 1
+	}
+	out := make([]RecommendationSnapshot, 0, len(draws)-start)
+	for t := start; t < len(draws); t++ {
+		history := draws[:t]
+		pred := Predict(history, killCount, window)
+		recs := GenerateRecommendations(history, pred, 10)
+		out = append(out, RecommendationSnapshot{
+			Issue:           draws[t].Issue,
+			Date:            draws[t].Date,
+			Open:            digitsString(draws[t].Digits),
+			Recommendations: recs,
+		})
+	}
+	// 最新期在前，便于页面打开后直接看到最近记录。
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
 }
 
 // GenerateRecommendations 生成 count 组推荐号码。
@@ -374,10 +418,18 @@ func GenerateRecommendations(draws []data.DigitDraw, pred Prediction, count int)
 	if positions >= 5 {
 		minDiff = 3
 	}
+	firstCap := (count + len(allowed[0]) - 1) / len(allowed[0])
+	if firstCap < 1 {
+		firstCap = 1
+	}
+	firstCounts := make(map[int]int, len(allowed[0]))
 	for len(selected) < count && len(selected) < len(candidates) {
 		bestIdx, bestScore := -1, -1e100
 		for i, cand := range candidates {
 			if containsCandidate(selected, cand.digits) {
+				continue
+			}
+			if len(cand.digits) > 0 && firstCounts[cand.digits[0]] >= firstCap {
 				continue
 			}
 			validDistance := true
@@ -400,6 +452,10 @@ func GenerateRecommendations(draws []data.DigitDraw, pred Prediction, count int)
 			}
 		}
 		if bestIdx < 0 {
+			if firstCap < count {
+				firstCap++
+				continue
+			}
 			if minDiff > 1 {
 				minDiff--
 				continue
@@ -407,6 +463,9 @@ func GenerateRecommendations(draws []data.DigitDraw, pred Prediction, count int)
 			break
 		}
 		selected = append(selected, candidates[bestIdx])
+		if len(candidates[bestIdx].digits) > 0 {
+			firstCounts[candidates[bestIdx].digits[0]]++
+		}
 	}
 
 	topRaw := selected[0].raw
