@@ -20,7 +20,7 @@ func ExtendWithDigits(base string, p3, p5 *position.Result) string {
 	if i := strings.Index(base, "</style>"); i >= 0 {
 		base = base[:i] + css + base[i:]
 	}
-	base = strings.Replace(base, "<title>福彩3D 杀码 + 双色球 数据参考</title>", "<title>福彩3D + 排列3 + 排列5 + 双色球 数据参考</title>", 1)
+	base = strings.Replace(base, "<title>福彩3D 杀码 + 双色球 数据参考</title>", "<title>彩票数据预测参考</title>", 1)
 	base = strings.Replace(base, "福彩3D + 双色球 · 数据参考", "福彩3D + 排列3/5 + 双色球 · 数据参考", 1)
 	base = strings.Replace(base, "福彩3D + 双色球 · 每日自动更新", "福彩3D + 排列3/5 + 双色球 · 每日自动更新", 1)
 	base = updateDigitFooterDates(base, p3, p5)
