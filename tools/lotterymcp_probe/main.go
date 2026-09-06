@@ -10,6 +10,7 @@ import (
 	"sort"
 
 	"fc3d-kill6/data"
+	"fc3d-kill6/engine/position"
 )
 
 type scored struct {
@@ -22,6 +23,7 @@ func main() {
 	p5Path := flag.String("p5-csv", "p5-history.csv", "排列5 CSV")
 	window := flag.Int("window", 1000, "最近回测期数")
 	top := flag.Int("top", 10, "每期推荐组数")
+	kind := flag.String("kind", "both", "回测范围: p3、p5 或 both")
 	flag.Parse()
 	p3, err := data.LoadDigitCSV(*p3Path, 3)
 	if err != nil {
@@ -31,8 +33,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	probe("Lotterymcp three_digit_analysis · 排列3", p3, *window, *top, 3, p3Candidates)
-	probe("Lotterymcp positional_sequence_analysis · 排列5", p5, *window, *top, 5, p5Candidates)
+	if *kind == "p3" || *kind == "both" {
+		probe("Lotterymcp three_digit_analysis · 排列3", p3, *window, *top, 3, p3Candidates)
+	}
+	if *kind == "p5" || *kind == "both" {
+		probe("Lotterymcp positional_sequence_analysis · 排列5", p5, *window, *top, 5, p5Candidates)
+	}
 }
 
 func probe(name string, draws []data.DigitDraw, window, top, positions int, fn func([]data.DigitDraw, int) []scored) {
@@ -46,12 +52,27 @@ func probe(name string, draws []data.DigitDraw, window, top, positions int, fn f
 	}
 	exact, two, n := 0, 0, 0
 	posHit := make([]int, positions)
+	hybridTrain := make([]int, top+1)
+	hybridTest := make([]int, top+1)
+	split := start + (len(draws)-start)/2
 	for t := start; t < len(draws); t++ {
 		pred := fn(draws[:t], top)
 		if len(pred) == 0 {
 			continue
 		}
 		actual := draws[t].Digits
+		currentPred := position.Predict(draws[:t], 2, 120)
+		current := position.GenerateRecommendations(draws[:t], currentPred, top)
+		for currentN := 0; currentN <= top; currentN++ {
+			portfolio := hybridPortfolio(current, pred, currentN, top)
+			if containsExact(portfolio, actual) {
+				if t < split {
+					hybridTrain[currentN]++
+				} else {
+					hybridTest[currentN]++
+				}
+			}
+		}
 		oneExact, oneTwo := false, false
 		for _, item := range pred {
 			matches := 0
@@ -93,6 +114,56 @@ func probe(name string, draws []data.DigitDraw, window, top, positions int, fn f
 		}
 	}
 	fmt.Println()
+	trainN, testN := split-start, len(draws)-split
+	fmt.Printf("  hybrid currentN/lotteryN train%d test%d:", trainN, testN)
+	for currentN := 0; currentN <= top; currentN++ {
+		fmt.Printf(" %d/%d=%.2f|%.2f", currentN, top-currentN, pct(hybridTrain[currentN], trainN), pct(hybridTest[currentN], testN))
+	}
+	fmt.Println()
+}
+
+func hybridPortfolio(current []position.Recommendation, lottery []scored, currentN, top int) [][]int {
+	out := make([][]int, 0, top)
+	seen := map[string]bool{}
+	add := func(d []int) {
+		key := fmt.Sprint(d)
+		if len(out) < top && !seen[key] {
+			seen[key] = true
+			out = append(out, append([]int(nil), d...))
+		}
+	}
+	for i := 0; i < currentN && i < len(current); i++ {
+		add(current[i].Digits)
+	}
+	for _, item := range lottery {
+		add(item.d)
+		if len(out) >= top {
+			return out
+		}
+	}
+	for _, item := range current {
+		add(item.Digits)
+	}
+	return out
+}
+
+func containsExact(portfolio [][]int, actual []int) bool {
+	for _, d := range portfolio {
+		if len(d) != len(actual) {
+			continue
+		}
+		ok := true
+		for i := range d {
+			if d[i] != actual[i] {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
 }
 
 func p3Candidates(draws []data.DigitDraw, top int) []scored {

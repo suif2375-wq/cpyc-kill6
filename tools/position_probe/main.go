@@ -15,6 +15,7 @@ func main() {
 	positions := flag.Int("positions", 5, "位数")
 	window := flag.Int("window", 120, "近期窗口")
 	top := flag.Int("top", 10, "推荐组数")
+	checks := flag.Int("checks", 100, "推荐号码滚动回测期数")
 	flag.Parse()
 	draws, err := data.LoadDigitCSV(*path, *positions)
 	if err != nil {
@@ -25,7 +26,7 @@ func main() {
 	for _, st := range res.Stats {
 		fmt.Printf("pos%d rate=%.2f baseline=%.2f model=%s n=%d\n", st.Position, st.Rate, st.Baseline, st.Model, st.N)
 	}
-	probeRecommendationCoverage(draws, *top)
+	probeRecommendationCoverage(draws, *top, *checks)
 	if *positions == 3 {
 		legacy := make([]data.Draw, len(draws))
 		for i, d := range draws {
@@ -41,17 +42,37 @@ func main() {
 	}
 }
 
-func probeRecommendationCoverage(draws []data.DigitDraw, top int) {
+func probeRecommendationCoverage(draws []data.DigitDraw, top, checks int) {
 	if len(draws) < 150 {
 		return
 	}
-	checks := 100
+	if checks <= 0 || checks >= len(draws) {
+		checks = 100
+	}
 	start := len(draws) - checks
 	exact, two := 0, 0
+	killAll, killOneMiss, killMultiMiss := 0, 0, 0
 	for t := start; t < len(draws); t++ {
 		history := draws[:t]
 		pred := position.Predict(history, 2, 120)
 		recs := position.GenerateRecommendations(history, pred, top)
+		killMisses := 0
+		for p, digit := range draws[t].Digits {
+			for _, killed := range pred.Kills[p] {
+				if digit == killed {
+					killMisses++
+					break
+				}
+			}
+		}
+		switch killMisses {
+		case 0:
+			killAll++
+		case 1:
+			killOneMiss++
+		default:
+			killMultiMiss++
+		}
 		for _, rec := range recs {
 			matches := 0
 			for p, d := range rec.Digits {
@@ -69,7 +90,7 @@ func probeRecommendationCoverage(draws []data.DigitDraw, top int) {
 			}
 		}
 	}
-	fmt.Printf("recommend-top%d recent%d exact=%.2f%% two+pos=%.2f%%\n", top, checks, pct(exact, checks), pct(two, checks))
+	fmt.Printf("recommend-top%d recent%d exact=%.2f%% two+pos=%.2f%% kill-all=%.2f%% one-miss=%.2f%% multi-miss=%.2f%%\n", top, checks, pct(exact, checks), pct(two, checks), pct(killAll, checks), pct(killOneMiss, checks), pct(killMultiMiss, checks))
 }
 
 func probeP5(draws []data.DigitDraw) {

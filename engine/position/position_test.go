@@ -107,6 +107,24 @@ func TestP5PrefixMatchesP3(t *testing.T) {
 	}
 }
 
+func TestCurrentP5PrefixMatchesP3(t *testing.T) {
+	p3Draws, err := data.LoadDigitCSV("../../p3-history.csv", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p5Draws, err := data.LoadDigitCSV("../../p5-history.csv", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p3 := Predict(p3Draws, 2, 120)
+	p5 := Predict(p5Draws, 2, 120)
+	for p := 0; p < 3; p++ {
+		if len(p3.Kills[p]) != len(p5.Kills[p]) || p3.Kills[p][0] != p5.Kills[p][0] || p3.Kills[p][1] != p5.Kills[p][1] {
+			t.Fatalf("current real-data prefix mismatch at pos %d: p3=%v p5=%v", p, p3.Kills[p], p5.Kills[p])
+		}
+	}
+}
+
 func TestRecommendationsAreDiversified(t *testing.T) {
 	for _, positions := range []int{3, 5} {
 		draws := makeDraws(150, positions)
