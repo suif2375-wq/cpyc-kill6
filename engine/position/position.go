@@ -423,9 +423,19 @@ func GenerateRecommendations(draws []data.DigitDraw, pred Prediction, count int)
 	}
 	firstCounts := make(map[int]int, len(allowed[0]))
 	for len(selected) < count && len(selected) < len(candidates) {
+		// 组数足够时，先让每个未被杀号的首位数字至少出现一次，之后才
+		// 允许首位重复，避免高分候选集中导致某个可用开头完全缺失。
+		coverageTarget := len(allowed[0])
+		if coverageTarget > count {
+			coverageTarget = count
+		}
+		coverFirst := len(firstCounts) < coverageTarget
 		bestIdx, bestScore := -1, -1e100
 		for i, cand := range candidates {
 			if containsCandidate(selected, cand.digits) {
+				continue
+			}
+			if coverFirst && len(cand.digits) > 0 && firstCounts[cand.digits[0]] > 0 {
 				continue
 			}
 			if len(cand.digits) > 0 && firstCounts[cand.digits[0]] >= firstCap {
@@ -451,6 +461,10 @@ func GenerateRecommendations(draws []data.DigitDraw, pred Prediction, count int)
 			}
 		}
 		if bestIdx < 0 {
+			if coverFirst && minDiff > 1 {
+				minDiff--
+				continue
+			}
 			if firstCap < count {
 				firstCap++
 				continue

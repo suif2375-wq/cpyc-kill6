@@ -36,3 +36,12 @@ func TestUpdateDigitFooterDates(t *testing.T) {
 		}
 	}
 }
+
+func TestRecommendationHistoryMarksPendingDraw(t *testing.T) {
+	html := renderRecommendationHistory("p3-history", []position.RecommendationSnapshot{{
+		Issue: "2026239", Date: "2026-09-06", Recommendations: []position.Recommendation{{Rank: 1, Number: "371"}},
+	}}, 3)
+	if !strings.Contains(html, "2026-09-06 · 待开奖") {
+		t.Fatalf("pending draw status missing: %s", html)
+	}
+}

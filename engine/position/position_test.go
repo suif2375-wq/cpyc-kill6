@@ -153,6 +153,23 @@ func TestRecommendationsBalanceFirstPosition(t *testing.T) {
 	}
 }
 
+func TestRecommendationsCoverEveryAllowedFirstDigit(t *testing.T) {
+	for _, positions := range []int{3, 5} {
+		draws := makeDraws(160, positions)
+		pred := Predict(draws, 2, 60)
+		recs := GenerateRecommendations(draws, pred, 10)
+		covered := map[int]bool{}
+		for _, rec := range recs {
+			covered[rec.Digits[0]] = true
+		}
+		for digit := 0; digit <= 9; digit++ {
+			if !contains(pred.Kills[0], digit) && !covered[digit] {
+				t.Fatalf("positions=%d first digit %d is allowed but uncovered: kills=%v recs=%v", positions, digit, pred.Kills[0], recs)
+			}
+		}
+	}
+}
+
 func TestRecommendationHistoryUsesPriorData(t *testing.T) {
 	draws := makeDraws(36, 3)
 	history := GenerateRecommendationHistory(draws, 2, 60, 5)

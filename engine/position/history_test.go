@@ -21,8 +21,13 @@ func TestRecordCurrentPredictionStartsFreshAndIsIdempotent(t *testing.T) {
 	if history[0].Open != "" {
 		t.Fatalf("future target should not have open result: %+v", history[0])
 	}
+	history, err = RecordCurrentPrediction(path, result, "2026238", "2026-09-05")
+	if err != nil || history[0].Date != "2026-09-05" {
+		t.Fatalf("existing target date should be corrected: history=%+v err=%v", history, err)
+	}
+	result.Recommendations = []Recommendation{{Rank: 1, Number: "789", Digits: []int{7, 8, 9}}}
 	history, err = RecordCurrentPrediction(path, result, "2026238", result.Latest.Date)
-	if err != nil || len(history) != 1 {
+	if err != nil || len(history) != 1 || history[0].Date != "2026-09-05" || history[0].Recommendations[0].Number != "789" {
 		t.Fatalf("duplicate target should be idempotent: history=%+v err=%v", history, err)
 	}
 

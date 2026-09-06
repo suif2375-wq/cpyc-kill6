@@ -137,7 +137,11 @@ func renderRecommendationHistory(id string, history []position.RecommendationSna
 		b.WriteString(`<div class="digit-muted">暂无历史推荐记录。</div>`)
 	} else {
 		for _, snapshot := range history {
-			b.WriteString(`<article class="digit-history-item" data-digit-history-issue="` + html.EscapeString(snapshot.Issue) + `"><div class="digit-history-item-head"><strong>第` + html.EscapeString(snapshot.Issue) + `期</strong><span>` + html.EscapeString(snapshot.Date) + ` · 开奖 ` + html.EscapeString(snapshot.Open) + `</span></div><div class="digit-history-numbers">`)
+			openStatus := "待开奖"
+			if snapshot.Open != "" {
+				openStatus = "开奖 " + snapshot.Open
+			}
+			b.WriteString(`<article class="digit-history-item" data-digit-history-issue="` + html.EscapeString(snapshot.Issue) + `"><div class="digit-history-item-head"><strong>第` + html.EscapeString(snapshot.Issue) + `期</strong><span>` + html.EscapeString(snapshot.Date) + ` · ` + html.EscapeString(openStatus) + `</span></div><div class="digit-history-numbers">`)
 			for _, rec := range snapshot.Recommendations {
 				b.WriteString(`<span class="digit-history-number"><b>` + fmt.Sprintf("%02d", rec.Rank) + `</b>` + html.EscapeString(rec.Number) + `</span>`)
 			}

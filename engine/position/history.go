@@ -50,6 +50,14 @@ func RecordCurrentPrediction(path string, result *Result, targetIssue, targetDat
 	for i := range history {
 		if history[i].Issue == targetIssue {
 			found = true
+			// 旧版本曾把 UTC 运行日期当作开奖日期；已有目标期也要自动纠正。
+			if targetDate != "" && (history[i].Date == "" || targetDate > history[i].Date) {
+				history[i].Date = targetDate
+			}
+			// 尚未开奖的当前期可以应用修复后的推荐算法；已开奖记录保持原样。
+			if history[i].Open == "" {
+				history[i].Recommendations = cloneRecommendations(result.Recommendations)
+			}
 			break
 		}
 	}

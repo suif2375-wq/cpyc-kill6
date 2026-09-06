@@ -198,8 +198,12 @@ func main() {
 
 func recordRecommendationHistory(path string, result *position.Result) []position.RecommendationSnapshot {
 	targetIssue := fetch.NextIssueCalc(result.Latest.Issue, result.Latest.Date, "")
-	// Date 表示本次生成推荐的日期；不要沿用上一期开奖日期，便于“从今天开始”查询。
-	history, err := position.RecordCurrentPrediction(path, result, targetIssue, time.Now().Format("2006-01-02"))
+	// 历史查询展示目标期的预计开奖日期，而不是 GitHub Actions 的 UTC 运行日期。
+	targetDate := result.Latest.Date
+	if latestDate, err := time.Parse("2006-01-02", result.Latest.Date); err == nil {
+		targetDate = latestDate.AddDate(0, 0, 1).Format("2006-01-02")
+	}
+	history, err := position.RecordCurrentPrediction(path, result, targetIssue, targetDate)
 	if err != nil {
 		fmt.Printf("  ⚠️ 推荐历史记录失败: %v\n", err)
 		return nil
