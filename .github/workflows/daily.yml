@@ -5,11 +5,15 @@ on:
     branches: [main]   # 代码变更推送后立即构建并部署 Pages
   schedule:
     # 北京时间 21:16、21:26、21:30、22:00（GitHub Actions 使用 UTC）。
+    # GitHub 的定时任务可能延迟或漏触发，22:20、22:40、23:00 再做三次兜底检查。
     # 只在发现新期号时提交，重复运行不会产生空提交。
     - cron: '16 13 * * *'
     - cron: '26 13 * * *'
     - cron: '30 13 * * *'
     - cron: '0 14 * * *'
+    - cron: '20 14 * * *'
+    - cron: '40 14 * * *'
+    - cron: '0 15 * * *'
   workflow_dispatch:  # 手动触发
 
 concurrency:
@@ -32,6 +36,7 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v7
         with:
+          ref: main
           fetch-depth: 0
 
       - name: 设置 Go
@@ -55,7 +60,19 @@ jobs:
             echo "无变更"
           else
             git commit -m "自动更新 $(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M') [skip ci]"
-            git push origin main
+            # 延迟的 schedule 可能与其他运行重叠；推送前同步最新 main，冲突时重试。
+            for attempt in 1 2 3; do
+              git fetch origin main
+              git rebase origin/main
+              if git push origin HEAD:main; then
+                break
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "连续 3 次推送失败"
+                exit 1
+              fi
+              sleep $((attempt * 5))
+            done
           fi
 
       - name: 上传 Pages 产物
