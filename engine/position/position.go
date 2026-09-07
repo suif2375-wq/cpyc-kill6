@@ -493,6 +493,188 @@ func GenerateRecommendations(draws []data.DigitDraw, pred Prediction, count int)
 	return result
 }
 
+// GeneratePrefixAlignedRecommendations 生成与排列3推荐逐组对应的排列5号码。
+// 排列5的前三位固定为 prefixes 中同排名的排列3号码，只对后两位做
+// 位置概率、和值、跨度、奇偶和跨期规律评分。这与两个玩法共用前三位
+// 开奖号码的事实保持一致，同时保留排列5后两位的独立建模。
+func GeneratePrefixAlignedRecommendations(draws []data.DigitDraw, pred Prediction, prefixes []Recommendation) []Recommendation {
+	const prefixLen = 3
+	positions := inferPositions(draws)
+	if positions != 5 || len(pred.Kills) != positions || len(prefixes) == 0 {
+		return nil
+	}
+	if len(prefixes) > 50 {
+		prefixes = prefixes[:50]
+	}
+
+	probs := make([][]float64, positions)
+	for p := 0; p < positions; p++ {
+		probs[p] = scorePosition(draws, p, ModelBlend, 120)
+	}
+	allowedSuffix := make([][]int, positions-prefixLen)
+	for p := prefixLen; p < positions; p++ {
+		for d := 0; d <= 9; d++ {
+			if !contains(pred.Kills[p], d) {
+				allowedSuffix[p-prefixLen] = append(allowedSuffix[p-prefixLen], d)
+			}
+		}
+		if len(allowedSuffix[p-prefixLen]) == 0 {
+			allowedSuffix[p-prefixLen] = []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		}
+	}
+
+	winStart := len(draws) - 120
+	if winStart < 0 {
+		winStart = 0
+	}
+	var sumTotal, spanTotal, oddTotal int
+	for i := winStart; i < len(draws); i++ {
+		digits := draws[i].Digits
+		s, minV, maxV, odd := 0, 9, 0, 0
+		for _, d := range digits {
+			s += d
+			if d < minV {
+				minV = d
+			}
+			if d > maxV {
+				maxV = d
+			}
+			if d%2 == 1 {
+				odd++
+			}
+		}
+		sumTotal += s
+		spanTotal += maxV - minV
+		oddTotal += odd
+	}
+	n := len(draws) - winStart
+	meanSum := float64(sumTotal) / float64(maxInt(n, 1))
+	meanSpan := float64(spanTotal) / float64(maxInt(n, 1))
+	meanOdd := float64(oddTotal) / float64(maxInt(n, 1))
+	stdSum := recentStd(draws, winStart, meanSum, 0)
+	stdSpan := recentStd(draws, winStart, meanSpan, 1)
+	if stdSum < 1 {
+		stdSum = 4
+	}
+	if stdSpan < 1 {
+		stdSpan = 2
+	}
+	danma := pattern.AnalyzeDigits(pattern.DigitDanma, draws, pattern.DefaultDigitConfig)
+	dudan := pattern.AnalyzeDigits(pattern.DigitDudan, draws, pattern.DefaultDigitConfig)
+
+	makeCandidate := func(digits []int) recommendationCandidate {
+		s, minV, maxV, odd, logP := 0, 9, 0, 0, 0.0
+		patternBonus := 0.0
+		for p, d := range digits {
+			s += d
+			if d < minV {
+				minV = d
+			}
+			if d > maxV {
+				maxV = d
+			}
+			if d%2 == 1 {
+				odd++
+			}
+			pval := probs[p][d]
+			if pval < 1e-9 {
+				pval = 1e-9
+			}
+			logP += math.Log(pval)
+			if danma != nil && contains(danma.Picks, d) {
+				patternBonus += 0.018
+			}
+			if dudan != nil && contains(dudan.Picks, d) {
+				patternBonus -= 0.012
+			}
+		}
+		span := maxV - minV
+		sumBonus := math.Exp(-math.Abs(float64(s)-meanSum) / stdSum)
+		spanBonus := math.Exp(-math.Abs(float64(span)-meanSpan) / stdSpan)
+		oddBonus := math.Exp(-math.Abs(float64(odd)-meanOdd) / 1.5)
+		return recommendationCandidate{
+			digits: append([]int(nil), digits...),
+			raw:    logP + 0.18*sumBonus + 0.08*spanBonus + 0.05*oddBonus + patternBonus,
+			sum:    s,
+			span:   span,
+			odd:    odd,
+		}
+	}
+
+	selected := make([]recommendationCandidate, 0, len(prefixes))
+	suffixPairs := make(map[string]int)
+	tensCounts := make(map[int]int)
+	onesCounts := make(map[int]int)
+	for _, prefix := range prefixes {
+		if len(prefix.Digits) < prefixLen {
+			return nil
+		}
+		digits := make([]int, positions)
+		copy(digits, prefix.Digits[:prefixLen])
+		for p := 0; p < prefixLen; p++ {
+			if contains(pred.Kills[p], digits[p]) {
+				return nil
+			}
+		}
+
+		best := recommendationCandidate{}
+		bestScore := -1e100
+		found := false
+		// 优先保持任意两组排列5至少有3个位置不同；如果极端数据下
+		// 候选不足，再放宽到2个位置，但仍不重复后两位组合。
+		for minDiff := 3; minDiff >= 2 && !found; minDiff-- {
+			for _, tens := range allowedSuffix[0] {
+				for _, ones := range allowedSuffix[1] {
+					pair := fmt.Sprintf("%d%d", tens, ones)
+					if suffixPairs[pair] > 0 {
+						continue
+					}
+					digits[3], digits[4] = tens, ones
+					cand := makeCandidate(digits)
+					validDistance := true
+					for _, picked := range selected {
+						if digitDistance(cand.digits, picked.digits) < minDiff {
+							validDistance = false
+							break
+						}
+					}
+					if !validDistance {
+						continue
+					}
+					adjusted := cand.raw - 0.08*float64(tensCounts[tens]+onesCounts[ones])
+					if adjusted > bestScore {
+						best, bestScore, found = cand, adjusted, true
+					}
+				}
+			}
+		}
+		if !found {
+			return nil
+		}
+		selected = append(selected, best)
+		pair := fmt.Sprintf("%d%d", best.digits[3], best.digits[4])
+		suffixPairs[pair]++
+		tensCounts[best.digits[3]]++
+		onesCounts[best.digits[4]]++
+	}
+
+	topRaw := selected[0].raw
+	for _, cand := range selected[1:] {
+		if cand.raw > topRaw {
+			topRaw = cand.raw
+		}
+	}
+	result := make([]Recommendation, 0, len(selected))
+	for i, cand := range selected {
+		result = append(result, Recommendation{
+			Rank: i + 1, Number: digitsString(cand.digits), Digits: append([]int(nil), cand.digits...),
+			Score: recommendationScore(cand.raw, topRaw), Sum: cand.sum,
+			Reasons: recommendationReasons(cand, meanSum, meanSpan, meanOdd),
+		})
+	}
+	return result
+}
+
 func recentStd(draws []data.DigitDraw, start int, mean float64, mode int) float64 {
 	if start >= len(draws) {
 		return 0

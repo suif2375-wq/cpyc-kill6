@@ -84,6 +84,46 @@ func TestGenerateRecommendationsP5(t *testing.T) {
 	}
 }
 
+func TestGeneratePrefixAlignedRecommendations(t *testing.T) {
+	p3Draws := makeDraws(160, 3)
+	p5Draws := makeDraws(160, 5)
+	p3Pred := Predict(p3Draws, 2, 60)
+	p5Pred := Predict(p5Draws, 2, 60)
+	p3Recs := GenerateRecommendations(p3Draws, p3Pred, 10)
+	p5Recs := GeneratePrefixAlignedRecommendations(p5Draws, p5Pred, p3Recs)
+	if len(p5Recs) != len(p3Recs) {
+		t.Fatalf("aligned recommendations=%d want %d", len(p5Recs), len(p3Recs))
+	}
+	seenSuffix := map[string]bool{}
+	for i := range p3Recs {
+		if p5Recs[i].Rank != i+1 || len(p5Recs[i].Digits) != 5 {
+			t.Fatalf("invalid aligned recommendation: %+v", p5Recs[i])
+		}
+		for p := 0; p < 3; p++ {
+			if p5Recs[i].Digits[p] != p3Recs[i].Digits[p] {
+				t.Fatalf("rank %d prefix mismatch: p3=%s p5=%s", i+1, p3Recs[i].Number, p5Recs[i].Number)
+			}
+		}
+		for p, d := range p5Recs[i].Digits {
+			if contains(p5Pred.Kills[p], d) {
+				t.Fatalf("recommendation %s hits kill at pos %d", p5Recs[i].Number, p)
+			}
+		}
+		suffix := p5Recs[i].Number[3:]
+		if seenSuffix[suffix] {
+			t.Fatalf("duplicate suffix %s in aligned recommendations", suffix)
+		}
+		seenSuffix[suffix] = true
+	}
+	for i := 0; i < len(p5Recs); i++ {
+		for j := i + 1; j < len(p5Recs); j++ {
+			if digitDistance(p5Recs[i].Digits, p5Recs[j].Digits) < 3 {
+				t.Fatalf("aligned recommendations too similar: %s %s", p5Recs[i].Number, p5Recs[j].Number)
+			}
+		}
+	}
+}
+
 func TestPredictionKillsAreDistinct(t *testing.T) {
 	for _, positions := range []int{3, 5} {
 		pred := Predict(makeDraws(120, positions), 2, 60)

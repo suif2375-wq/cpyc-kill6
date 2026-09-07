@@ -161,19 +161,39 @@ func main() {
 	var p3Res, p5Res *position.Result
 	if len(p3Draws) >= 80 {
 		p3Res = position.Backtest(p3Draws, 2, 120)
-		p3Res.RecommendationHistory = recordRecommendationHistory(*p3RecHistoryPath, p3Res)
-		fmt.Printf("  📊 排列3: %d期 · 全位避开%.1f%% (随机基线%.1f%%) · 本期%s\n",
-			p3Res.Total, p3Res.AllRate, p3Res.BaselineAll, position.FormatPrediction(p3Res.Prediction))
 	} else {
 		fmt.Printf("  ⚠️ 排列3数据不足: %d期，页面保留入口，等待同步\n", len(p3Draws))
 	}
 	if len(p5Draws) >= 80 {
 		p5Res = position.Backtest(p5Draws, 2, 120)
+	} else {
+		fmt.Printf("  ⚠️ 排列5数据不足: %d期，页面保留入口，等待同步\n", len(p5Draws))
+	}
+	// 排列3和排列5同期共用前三位开奖号码。先生成排列3的10组前缀，
+	// 再为每个前缀选择排列5的高分后两位，使页面第1–10组一一对应。
+	if p3Res != nil && p5Res != nil {
+		p3Target := fetch.NextIssueCalc(p3Res.Latest.Issue, p3Res.Latest.Date, "")
+		p5Target := fetch.NextIssueCalc(p5Res.Latest.Issue, p5Res.Latest.Date, "")
+		if p3Target == p5Target {
+			aligned := position.GeneratePrefixAlignedRecommendations(p5Draws, p5Res.Prediction, p3Res.Recommendations)
+			if len(aligned) == len(p3Res.Recommendations) {
+				p5Res.Recommendations = aligned
+			} else {
+				fmt.Printf("  ⚠️ 排列5推荐前缀对齐失败: 生成 %d/%d 组\n", len(aligned), len(p3Res.Recommendations))
+			}
+		} else {
+			fmt.Printf("  ⚠️ 排列3/5目标期不一致，暂不对齐推荐: P3=%s P5=%s\n", p3Target, p5Target)
+		}
+	}
+	if p3Res != nil {
+		p3Res.RecommendationHistory = recordRecommendationHistory(*p3RecHistoryPath, p3Res)
+		fmt.Printf("  📊 排列3: %d期 · 全位避开%.1f%% (随机基线%.1f%%) · 本期%s\n",
+			p3Res.Total, p3Res.AllRate, p3Res.BaselineAll, position.FormatPrediction(p3Res.Prediction))
+	}
+	if p5Res != nil {
 		p5Res.RecommendationHistory = recordRecommendationHistory(*p5RecHistoryPath, p5Res)
 		fmt.Printf("  📊 排列5: %d期 · 全位避开%.1f%% (随机基线%.1f%%) · 本期%s\n",
 			p5Res.Total, p5Res.AllRate, p5Res.BaselineAll, position.FormatPrediction(p5Res.Prediction))
-	} else {
-		fmt.Printf("  ⚠️ 排列5数据不足: %d期，页面保留入口，等待同步\n", len(p5Draws))
 	}
 
 	// Step 5: 生成 HTML
